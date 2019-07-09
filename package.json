@@ -1,0 +1,19 @@
+{
+  "name": "synthmusic",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon src/server.js"
+  },
+  "author": "MatthewBridgeman",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^1.19.1"
+  },
+  "dependencies": {
+    "@slack/rtm-api": "^5.0.1",
+    "nconf": "^0.10.0",
+    "sonos": "^1.12.0"
+  }
+}
