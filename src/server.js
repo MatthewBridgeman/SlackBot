@@ -9,6 +9,7 @@ config.file({ file: 'config.json' });
 config.defaults({
     'adminChannel': 'music-admin',
     'standardChannel': 'music',
+    'spotifyMarket': 'US'
 });
 
 const slackToken = config.get('slackToken');
