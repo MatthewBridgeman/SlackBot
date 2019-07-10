@@ -9,7 +9,8 @@ config.file({ file: 'config.json' });
 config.defaults({
     'adminChannel': 'music-admin',
     'standardChannel': 'music',
-    'spotifyMarket': 'US'
+    'spotifyMarket': 'US',
+    "spotifySearchLimit": 5
 });
 
 const slackToken = config.get('slackToken');

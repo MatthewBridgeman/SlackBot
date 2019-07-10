@@ -235,15 +235,15 @@ class SonosClass {
                 return this._slackMessage('No songs found! :(', channel);
             }
 
-            const songs = songList.map(song => {
+            const songs = songList.map(songInfo => {
                 const {
                     artist,
-                    songName,
+                    song,
                     album,
                     releaseDate,
-                } = song;
+                } = songInfo;
 
-                return `${padRight(`${artist} - ${songName} (${album})`, 80)} Released: ${releaseDate}`;
+                return `${padRight(`${artist} - ${song} (${album})`, 80)} Released: ${releaseDate}`;
             });
 
             const message = `\`\`\`${songs.join('\n')}\`\`\``;

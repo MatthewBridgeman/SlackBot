@@ -1,11 +1,13 @@
 const spotify = require('node-spotify-api');
 
-const { padRight } = require('./utils');
-
 let Spotify;
+
+let searchLimit;
 
 class SpotifyClass {
     constructor(config) {
+        searchLimit = config.get('spotifySearchLimit');
+
         Spotify = new spotify({
             id: config.get('spotifyId'),
             secret: config.get('spotifySecret'),
@@ -16,7 +18,7 @@ class SpotifyClass {
         const songList = [];
 
         try {
-            const { tracks } = await Spotify.search({ type: 'track', query, limit: 5 });
+            const { tracks } = await Spotify.search({ type: 'track', query, limit: searchLimit });
 
             tracks.items.forEach(track => {
                 const {
