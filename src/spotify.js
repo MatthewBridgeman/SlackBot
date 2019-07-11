@@ -33,7 +33,7 @@ class SpotifyClass {
                 } = track;
 
                 const artistName = artists && artists.length && artists[0].name;
-                const albumImage = images && images.length && images[0].url;
+                const albumImage = images && images.length && images[2] && images[2].url;
 
                 const song = {
                     artist: artistName,

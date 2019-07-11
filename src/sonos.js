@@ -1,4 +1,5 @@
 const autoBind = require('auto-bind');
+const _ = require('lodash');
 const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
 
 const { secondFormatter, padRight } = require('./utils');
@@ -7,6 +8,8 @@ const spotify = require('./spotify');
 let Slack;
 let Sonos;
 let Spotify;
+
+const playmodes = ['NORMAL', 'REPEAT_ONE', 'REPEAT_ALL', 'SHUFFLE', 'SHUFFLE_NOREPEAT', 'SHUFFLE_REPEAT_ONE'];
 
 class SonosClass {
     constructor(slackClient, config) {
@@ -42,10 +45,6 @@ class SonosClass {
             const input = splitMessage.join(' ');
 
             switch (command) {
-                case 'current':
-                    this._current(channel);
-                    break;
-
                 case 'play':
                     this._play(channel);
                     break;
@@ -72,8 +71,18 @@ class SonosClass {
                     this._prev(channel);
                     break;
 
+                case 'current':
+                    this._current(channel);
+                    break;
+
                 case 'playlist':
+                case 'list':
+                case 'songs':
                     this._playlist(channel);
+                    break;
+
+                case 'playmode':
+                    this._playmode(input, channel);
                     break;
 
                 case 'search':
@@ -90,6 +99,9 @@ class SonosClass {
                     this._remove(input, channel);
                     break;
 
+                case 'help':
+                    this._help(channel);
+                    break;
 
                 default:
                     this._slackMessage(`I'm sorry, but ${command} is not a command`, channel);
@@ -109,23 +121,51 @@ class SonosClass {
 
     async _currentSong() {
         try {
-            const { artist, title, duration, position } = await Sonos.currentTrack();
+            const { artist, title, duration, position, queuePosition } = await Sonos.currentTrack();
             const durationFormatted = secondFormatter(duration);
             const positionFormatted = secondFormatter(position);
 
-           return { artist, title, position: positionFormatted, duration: durationFormatted };
+           return { artist, title, position: positionFormatted, duration: durationFormatted, playlistPosition: queuePosition };
         } catch (error) {
             console.error('An error occurred getting the current song info:', error);
         }
     }
 
     // COMMAND FUNCTIONS
+    async _help(channel) {
+        try {
+            const message = [
+                'Current commands!',
+                ' ===  ===  ===  ===  ===  ===  ===  ===  ===  ===  === ',
+                '`!play` : Play song',
+                '`!stop` : Stop song',
+                '`!pause` : Pause song',
+                '`!resume` : Resume song',
+                '`!next` : Play the next song',
+                '`!previous` : Play the previous song',
+                '`!current` : Display the current song',
+                '`!playlist` : Display the entire playlist',
+                '`!playmode` : Display the current playmode',
+                '`!playmode <playmode>` : Change the playmode',
+                '`!search <text>` : Search Spotify for a song',
+                '`!add <text>` : Add the first returned song result from Spotify to the playlist',
+                '`!remove <playlist position>` : Remove a song at the position from the playlist',
+                ' ===  ===  ===  ===  MatthewBridgeman  ===  ===  ===  === ',
+            ].join('\n');
+
+            this._slackMessage(message, channel);
+        } catch (error) {
+            this._slackMessage(`An error occurred trying to display the help list! :(`, channel);
+            console.error('An error occurred displaying the help list:', error);
+        }
+    }
+
     async _current(channel) {
         try {
             const { artist, title, position, duration } = await this._currentSong();
 
             console.log({ artist, title, duration });
-            this._slackMessage(`Current song playing: *${artist}* - *${title}* (${position} / ${duration})`, channel);
+            this._slackMessage(`:notes: Current song playing: *${artist}* - *${title}* (${position} / ${duration}) :notes:`, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to get the current song! :(`, channel);
             console.error('An error occurred getting the current song:', error);
@@ -269,7 +309,7 @@ class SonosClass {
 
             const {
                 artist,
-                songName,
+                song,
                 album,
                 albumImage,
                 uri,
@@ -283,7 +323,7 @@ class SonosClass {
 
             const message = [
                 albumImage,
-                `Sure thing! *${artist}* - *${songName} (${album})* has been added to the queue!`,
+                `Sure thing! *${artist}* - *${song} (${album})* has been added to the queue!`,
                 `Position ${position} out of ${playlistLength} in playlist`,
             ].join('\n');
 
@@ -335,10 +375,46 @@ class SonosClass {
                 return `${index}. ${artist} - ${title} (${album})`;
             });
 
-            this._slackMessage(`\`\`\`${songs.join('\n')}\`\`\``, channel);
+            const { artist, title, duration, position, playlistPosition }  = await this._currentSong();
+
+            const message = [
+                `:notes: Currently playing #${playlistPosition}: *${artist}* - *${title}* (${position} / ${duration}) :notes:`,
+                `\`\`\`${songs.join('\n')}\`\`\``,
+            ].join('\n');
+
+            this._slackMessage(message, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to get the playlist! :(`, channel);
             console.error('An error occurred getting the playlist:', error);
+        }
+    }
+
+    async _playmode(input, channel) {
+        try {
+            const currentPlaymode = await Sonos.getPlayMode('shuffle');
+
+            if (!input) {
+                return this._slackMessage(`Current playmode is set to: *${currentPlaymode.toLowerCase()}*`, channel);
+            }
+
+            const playmode = _.snakeCase(input).toUpperCase();
+
+            if (currentPlaymode === playmode) {
+                return this._slackMessage(`The playmode is already set to that!`, channel);
+            }
+
+            if (!playmodes.includes(playmode)) {
+                const playmodesFormatted = playmodes.map(mode => `*${_.lowerCase(mode)}*`).join(', ');
+
+                return this._slackMessage(`That playmode is not recognised, the available playmodes are: ${playmodesFormatted}`, channel);
+            }
+
+            await Sonos.setPlayMode(playmode);
+
+            this._slackMessage(`Playmode is now set to: ${input}`, channel);
+        } catch (error) {
+            this._slackMessage(`An error occurred trying to get/change the playmode! :(`, channel);
+            console.error('An error occurred getting/changing the playmode:', error);
         }
     }
 }
