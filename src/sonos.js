@@ -113,6 +113,10 @@ class SonosClass {
                         this._searchSong(input, channel);
                         break;
 
+                    case 'search2':
+                        this._searchSong2(input, channel);
+                        break;
+
                     case 'searchalbum':
                         this._searchAlbum(input, channel);
                         break;
@@ -157,7 +161,7 @@ class SonosClass {
                 return channelInfo.channel.name;
             }
         } catch (err) {
-             console.error('An error occurred getting channel info:', error);
+            console.error('An error occurred getting channel info:', error);
         }
     }
 
@@ -186,8 +190,40 @@ class SonosClass {
                         },
                     },
                 ],
-                channel: channel,
+                channel,
             });
+        } catch (error) {
+            console.error('An error occurred sending an image message:', error);
+        }
+    }
+
+    async _slackMessageWithButtons(options, channel) {
+        try {
+            const blocks = _.flatMap(options, (option) => ([
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": option,
+                    },
+                    "accessory": {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Add to Playlist",
+                            "emoji": true,
+                        },
+                        "value": "click_me_123",
+                    },
+                },
+                {
+                    "type": "divider"
+                }
+            ]));
+
+            blocks.pop();
+
+            await SlackWeb.chat.postMessage({ blocks, channel });
         } catch (error) {
             console.error('An error occurred sending an image message:', error);
         }
@@ -419,6 +455,40 @@ class SonosClass {
             const message = `\`\`\`${songs.join('\n')}\`\`\``;
 
             this._slackMessage(message, channel);
+        } catch (error) {
+            this._slackMessage(`An error occurred searching for the song! :(`, channel);
+            console.error('An error occurred searching for a song:', error);
+        }
+    }
+
+    async _searchSong2(input, channel) {
+        try {
+            if (!input) {
+                return this._slackMessage('You must specify a song to search for!\n!search <song name>', channel);
+            }
+
+            const songList = await Spotify.searchSong(input);
+
+            if (!songList.length) {
+                return this._slackMessage('No songs found! :(', channel);
+            }
+
+            const songs = songList.map(songInfo => {
+                const {
+                    artist,
+                    song,
+                    album,
+                    releaseDate,
+                } = songInfo;
+
+                return [
+                    `:musical_note: *${artist}* - *${song}*`,
+                    `:notebook: ${album}`,
+                    `:clock3: ${releaseDate}`,
+                ].join('\n');
+            });
+
+            this._slackMessageWithButtons(songs, channel);
         } catch (error) {
             this._slackMessage(`An error occurred searching for the song! :(`, channel);
             console.error('An error occurred searching for a song:', error);

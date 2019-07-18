@@ -8,7 +8,7 @@ const Sonos = require('./sonos');
 config.argv().env();
 config.file({ file: 'config.json' });
 config.defaults({
-    "sonosChannels" : ["sonos", "sonos3"],
+    "sonosChannels" : ["sonos"],
     "spotifyMarket": "GB",
     "spotifySearchLimit": 5,
     "volumeInterval": 5,
