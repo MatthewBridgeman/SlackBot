@@ -10,7 +10,10 @@ config.defaults({
     'adminChannel': 'music-admin',
     'standardChannel': 'music',
     'spotifyMarket': 'US',
-    "spotifySearchLimit": 5
+    "spotifySearchLimit": 5,
+    "volumeInterval": 5,
+    "volumeMax": 75,
+    "playlistNameMax": 30
 });
 
 const slackToken = config.get('slackToken');
