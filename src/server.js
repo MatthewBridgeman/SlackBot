@@ -1,5 +1,6 @@
 const config = require('nconf');
 const { RTMClient } = require('@slack/rtm-api');
+const { WebClient } = require('@slack/web-api');
 
 const Sonos = require('./sonos');
 
@@ -7,12 +8,11 @@ const Sonos = require('./sonos');
 config.argv().env();
 config.file({ file: 'config.json' });
 config.defaults({
-    'adminChannel': 'music-admin',
-    'standardChannel': 'music',
-    'spotifyMarket': 'US',
+    "sonosChannels" : ["sonos", "sonos3"],
+    "spotifyMarket": "GB",
     "spotifySearchLimit": 5,
     "volumeInterval": 5,
-    "volumeMax": 75,
+    "volumeMax": 35,
     "playlistNameMax": 30
 });
 
@@ -21,8 +21,9 @@ const slackToken = config.get('slackToken');
 // CONFIG VALIDATION (perhaps dynamically read variable names for the messages?)
 
 // CONNECT SLACK
-const slackClient = new RTMClient(slackToken);
-slackClient.start().catch(console.error);
+const slackRTMClient = new RTMClient(slackToken);
+const slackWebClient = new WebClient(slackToken);
+slackRTMClient.start().catch(console.error);
 
 // START SLACK LISTENER
-new Sonos(slackClient, config);
+new Sonos(slackRTMClient, slackWebClient, config);

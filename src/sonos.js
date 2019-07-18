@@ -2,161 +2,213 @@ const autoBind = require('auto-bind');
 const _ = require('lodash');
 const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
 
-    const { secondFormatter, padRight } = require('./utils');
-    const spotify = require('./spotify');
+const { secondFormatter, padRight } = require('./utils');
+const spotify = require('./spotify');
 
-    let Slack;
-    let Sonos;
-    let Spotify;
-    let volumeInterval;
-    let volumeMax;
-    let playlistNameMax;
+let SlackRTM;
+let SlackWeb;
+let Sonos;
+let Spotify;
+let volumeInterval;
+let volumeMax;
+let playlistNameMax;
+let sonosChannels;
 
-    const playmodes = ['NORMAL', 'REPEAT_ONE', 'REPEAT_ALL', 'SHUFFLE', 'SHUFFLE_NOREPEAT', 'SHUFFLE_REPEAT_ONE'];
+const playmodes = ['NORMAL', 'REPEAT_ONE', 'REPEAT_ALL', 'SHUFFLE', 'SHUFFLE_NOREPEAT', 'SHUFFLE_REPEAT_ONE'];
 
-    class SonosClass {
-        constructor(slackClient, config) {
-            Slack = slackClient;
-            volumeInterval = config.get('volumeInterval');
-            volumeMax = config.get('volumeMax');
-            playlistNameMax = config.get('playlistNameMax');
+class SonosClass {
+    constructor(slackRTMClient, slackWebClient, config) {
+        SlackRTM = slackRTMClient;
+        SlackWeb = slackWebClient;
+        volumeInterval = config.get('volumeInterval');
+        volumeMax = config.get('volumeMax');
+        playlistNameMax = config.get('playlistNameMax');
+        sonosChannels = config.get('sonosChannels');
 
-            // CONNECT SONOS
-            const sonosIp = config.get('sonosIp');
-            Sonos = new SonosClient(sonosIp);
+        // CONNECT SONOS
+        const sonosIp = config.get('sonosIp');
+        Sonos = new SonosClient(sonosIp);
 
-            const spotifyMarket = config.get('spotifyMarket');
+        const spotifyMarket = config.get('spotifyMarket');
 
-            if (spotifyMarket !== 'US') {
-                Sonos.setSpotifyRegion(SpotifyRegion.EU);
-            }
-
-            // INITIALIZE SPOTIFY
-            Spotify = new spotify(config,);
-
-            // MESSAGE LISTENER
-            Slack.on('message', (event) => this.processInput(event));
-
-            autoBind(this);
+        if (spotifyMarket !== 'US') {
+            Sonos.setSpotifyRegion(SpotifyRegion.EU);
         }
 
-        // PROCESS SLACK COMMANDS
-        processInput(event) {
-            const message = event.text;
-            const channel = event.channel;
+        // INITIALIZE SPOTIFY
+        Spotify = new spotify(config);
 
+        // MESSAGE LISTENER
+        SlackRTM.on('message', (event) => this.processInput(event));
+
+        autoBind(this);
+    }
+
+    // PROCESS SLACK COMMANDS
+    async processInput(event) {
+        const message = event.text;
+        const channel = event.channel;
+        const channelName = await this._getChannelName(channel);
+
+        if (sonosChannels.includes(channelName)) {
             if (message && message.charAt(0) === '!') {
                 const splitMessage = message.substring(1).split(' ');
-            const command = splitMessage.shift().toLowerCase();
-            const input = splitMessage.join(' ');
+                const command = splitMessage.shift().toLowerCase();
+                const input = splitMessage.join(' ');
 
-            switch (command) {
-                case 'play':
-                    this._play(channel);
-                    break;
+                switch (command) {
+                    case 'play':
+                        this._play(channel);
+                        break;
 
-                case 'resume':
-                    this._resume(channel);
-                    break;
+                    case 'resume':
+                        this._resume(channel);
+                        break;
 
-                case 'stop':
-                    this._stop(channel);
-                    break;
+                    case 'stop':
+                        this._stop(channel);
+                        break;
 
-                case 'pause':
-                    this._pause(channel);
-                    break;
+                    case 'pause':
+                        this._pause(channel);
+                        break;
 
-                case 'next':
-                    this._next(channel);
-                    break;
+                    case 'next':
+                        this._next(channel);
+                        break;
 
-                case 'previous':
-                case 'prev':
-                case 'back':
-                    this._prev(channel);
-                    break;
+                    case 'previous':
+                    case 'prev':
+                    case 'back':
+                        this._prev(channel);
+                        break;
 
-                case 'current':
-                    this._current(channel);
-                    break;
+                    case 'current':
+                        this._current(channel);
+                        break;
 
-                case 'playlist':
-                case 'list':
-                case 'songs':
-                    this._playlist(channel);
-                    break;
+                    case 'playlist':
+                    case 'list':
+                    case 'songs':
+                        this._playlist(channel);
+                        break;
 
-                case 'createplaylist':
-                    this._createPlaylist(input, channel);
-                    break;
+                    case 'createplaylist':
+                        this._createPlaylist(input, channel);
+                        break;
 
-                case 'playlists':
-                    this._playlists(channel);
-                    break;
+                    case 'playlists':
+                        this._playlists(channel);
+                        break;
 
-                case 'setplaylist':
-                    this._setPlaylist(input, channel);
-                    break;
+                    case 'setplaylist':
+                        this._setPlaylist(input, channel);
+                        break;
 
-                case 'playmode':
-                    this._playmode(input, channel);
-                    break;
+                    case 'playmode':
+                        this._playmode(input, channel);
+                        break;
 
-                case 'search':
-                    this._searchSong(input, channel);
-                    break;
+                    case 'search':
+                        this._searchSong(input, channel);
+                        break;
 
-                case 'searchalbum':
-                    this._searchAlbum(input, channel);
-                    break;
+                    case 'searchalbum':
+                        this._searchAlbum(input, channel);
+                        break;
 
-                case 'searchplaylist':
-                    this._searchPlaylist(input, channel);
-                    break;
+                    case 'searchplaylist':
+                        this._searchPlaylist(input, channel);
+                        break;
 
-                case 'add':
-                    this._add(input, channel);
-                    break;
+                    case 'add':
+                        this._add(input, channel);
+                        break;
 
-                case 'remove':
-                case 'rem':
-                case 'del':
-                    this._remove(input, channel);
-                    break;
+                    case 'remove':
+                    case 'rem':
+                    case 'del':
+                        this._remove(input, channel);
+                        break;
 
-                case 'volume':
-                case 'vol':
-                    this._volume(input, channel);
-                    break;
+                    case 'volume':
+                    case 'vol':
+                        this._volume(input, channel);
+                        break;
 
-                case 'help':
-                    this._help(channel);
-                    break;
+                    case 'help':
+                        this._help(channel);
+                        break;
 
-                default:
-                    this._slackMessage(`I'm sorry, but ${command} is not a command`, channel);
-                    break;
+                    default:
+                        this._slackMessage(`I'm sorry, but ${command} is not a command`, channel);
+                        break;
+                }
             }
         }
     }
 
     // HELPER FUNCTIONS
+    async _getChannelName(channel) {
+        try {
+            const channelInfo = await SlackWeb.conversations.info({ channel });
+
+            if (channelInfo.ok && channelInfo.channel) {
+                return channelInfo.channel.name;
+            }
+        } catch (err) {
+             console.error('An error occurred getting channel info:', error);
+        }
+    }
+
     async _slackMessage(message, channel) {
         try {
-            await Slack.sendMessage(message, channel);
+            await SlackRTM.sendMessage(message, channel);
         } catch (error) {
             console.error('An error occurred sending a message:', error);
+        }
+    }
+
+    async _slackMessageWithImage(message, image, channel) {
+        try {
+            await SlackWeb.chat.postMessage({
+                blocks: [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": message,
+                        },
+                        "accessory": {
+                            "type": "image",
+                            "image_url": image,
+                            "alt_text": "Album Art",
+                        },
+                    },
+                ],
+                channel: channel,
+            });
+        } catch (error) {
+            console.error('An error occurred sending an image message:', error);
+        }
+    }
+
+    async _sonosStatus() {
+        try {
+            return await Sonos.getCurrentState();
+        } catch (error) {
+            console.error('An error occurred getting the sonos status!:', error);
         }
     }
 
     async _currentSong() {
         try {
             const { artist, title, duration, position, queuePosition } = await Sonos.currentTrack();
+
             const durationFormatted = secondFormatter(duration);
             const positionFormatted = secondFormatter(position);
 
-           return { artist, title, position: positionFormatted, duration: durationFormatted, playlistPosition: queuePosition };
+            return { artist, title, position: positionFormatted, duration: durationFormatted, playlistPosition: queuePosition };
         } catch (error) {
             console.error('An error occurred getting the current song info:', error);
         }
@@ -168,10 +220,9 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
             const message = [
                 'Current commands!',
                 ' ===  ===  ===  ===  ===  ===  ===  ===  ===  ===  === ',
-                '`!play` : Play song',
+                '`!play` : Play/Resume song',
                 '`!stop` : Stop song',
                 '`!pause` : Pause song',
-                '`!resume` : Resume song',
                 '`!next` : Play the next song',
                 '`!previous` : Play the previous song',
                 '`!current` : Display the current song',
@@ -199,8 +250,18 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
     async _current(channel) {
         try {
             const { artist, title, position, duration } = await this._currentSong();
+            const status = await this._sonosStatus();
 
-            this._slackMessage(`:notes: Current song playing: *${artist}* - *${title}* (${position} / ${duration}) :notes:`, channel);
+            if (!artist || !title) {
+                return this._slackMessage('There is no currently selected song!', channel);;
+            }
+
+            const message = [
+                `:notes: Current song: *${artist}* - *${title}* (${position} / ${duration}) :notes:`,
+                `Current status: *${_.startCase(status)}*`,
+            ].join('\n');
+
+            this._slackMessage(message, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to get the current song! :(`, channel);
             console.error('An error occurred getting the current song:', error);
@@ -209,44 +270,54 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
 
     async _play(channel) {
         try {
-            await Sonos.selectQueue();
+            const status = await this._sonosStatus();
+
+            if (status === 'playing') {
+                return this._slackMessage('A song is already playing!', channel);;
+            }
+
             const success = await Sonos.play();
 
-            if (success) {
-                const { artist, title, duration } = await this._currentSong();
-
-                this._slackMessage(`Started playing: *${artist}* - *${title}* (${duration})`, channel);
+            if (!success) {
+                return this._slackMessage('Sorry! Unable to play the song! :(', channel);;
             }
+
+            const { artist, title, duration } = await this._currentSong();
+
+            if (!artist || !title) {
+                return this._slackMessage('There is no currently selected song to play!', channel);;
+            }
+
+            const state = status === 'stopped' ? 'Started' : 'Resumed';
+
+            this._slackMessage(`${state} playing: *${artist}* - *${title}* (${duration})`, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to play the song! :(`, channel);
             console.error('An error occurred playing the song:', error);
         }
     }
 
-    async _resume(channel) {
-        try {
-            const success = await Sonos.play();
-
-            if (success) {
-                const { artist, title, position, duration } = await this._currentSong();
-
-                this._slackMessage(`Resumed playing: *${artist}* - *${title}* (${position} / ${duration})`, channel);
-            }
-        } catch (error) {
-            this._slackMessage(`An error occurred trying to resume the song! :(`, channel);
-            console.error('An error occurred resuming the song:', error);
-        }
-    }
-
     async _stop(channel) {
         try {
+            const status = await this._sonosStatus();
+
+            if (status !== 'playing') {
+                return this._slackMessage('A song must be playing to stop!', channel);;
+            }
+
             const success = await Sonos.stop();
 
-            if (success) {
-                const { artist, title, position, duration } = await this._currentSong();
-
-                this._slackMessage(`Stopped playing: *${artist}* - *${title}*`, channel);
+            if (!success) {
+                return this._slackMessage('Sorry! Unable to stop the song! :(', channel);;
             }
+
+            const { artist, title } = await this._currentSong();
+
+            if (!artist || !title) {
+                return this._slackMessage('There is no currently selected song to stop playing!', channel);;
+            }
+
+            this._slackMessage(`Stopped playing: *${artist}* - *${title}*`, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to stop the song! :(`, channel);
             console.error('An error occurred stopping the song:', error);
@@ -255,13 +326,25 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
 
     async _pause(channel) {
         try {
+            const status = await this._sonosStatus();
+
+            if (status !== 'playing') {
+                return this._slackMessage('A song must be playing to pause!', channel);;
+            }
+
             const success = await Sonos.pause();
 
-            if (success) {
-                const { artist, title, position, duration } = await this._currentSong();
-
-                this._slackMessage(`Paused playing: *${artist}* - *${title}* (${position} / ${duration})`, channel);
+            if (!success) {
+                return this._slackMessage('Sorry! Unable to pause the song! :(', channel);;
             }
+
+            const { artist, title, position, duration } = await this._currentSong();
+
+            if (!artist || !title) {
+                return this._slackMessage('There is no currently selected song to pause playing!', channel);;
+            }
+
+            this._slackMessage(`Paused playing: *${artist}* - *${title}* (${position} / ${duration})`, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to pause the song! :(`, channel);
             console.error('An error occurred pausing the song:', error);
@@ -272,11 +355,17 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
         try {
             const success = await Sonos.next();
 
-            if (success) {
-                const { artist, title, duration } = await this._currentSong();
-
-                this._slackMessage(`Now playing next song in playlist: *${artist}* - *${title}* (${duration})`, channel);
+            if (!success) {
+                return this._slackMessage('Sorry! Unable to play the next song! :(', channel);;
             }
+
+            const { artist, title, duration } = await this._currentSong();
+
+            if (!artist || !title) {
+                return this._slackMessage('There is no song to play next!', channel);;
+            }
+
+            this._slackMessage(`Now playing next song in playlist: *${artist}* - *${title}* (${duration})`, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to play the next song! :(`, channel);
             console.error('An error occurred playing the next song in playlist:', error);
@@ -287,11 +376,17 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
         try {
             const success = await Sonos.previous();
 
-            if (success) {
-                const { artist, title, duration } = await this._currentSong();
-
-                this._slackMessage(`Now playing previous song in playlist: *${artist}* - *${title}* (${duration})`, channel);
+            if (!success) {
+                return this._slackMessage('Sorry! Unable to play the previous song! :(', channel);;
             }
+
+            const { artist, title, duration } = await this._currentSong();
+
+            if (!artist || !title) {
+                return this._slackMessage('There is no previous song to play!', channel);;
+            }
+
+            this._slackMessage(`Now playing previous song in playlist: *${artist}* - *${title}* (${duration})`, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to play the previous song! :(`, channel);
             console.error('An error occurred playing the previous song in playlist:', error);
@@ -419,12 +514,13 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
             } = result;
 
             const message = [
-                albumImage,
                 `Sure thing! *${artist}* - *${song} (${album})* has been added to the queue!`,
+                '',
                 `Position *${position}* out of *${playlistLength}* in playlist`,
             ].join('\n');
 
-            this._slackMessage(message, channel);
+
+            this._slackMessageWithImage(message, albumImage, channel);
         } catch (error) {
             this._slackMessage(`An error occurred trying to add the song to the playlist! :(`, channel);
             console.error('An error occurred adding a song to the playlist:', error);
@@ -472,7 +568,7 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
                 return `${index}. ${artist} - ${title} (${album})`;
             });
 
-            const { artist, title, duration, position, playlistPosition }  = await this._currentSong();
+            const { artist, title, duration, position, playlistPosition } = await this._currentSong();
 
             const message = [
                 `:notes: Currently playing #${playlistPosition}: *${artist}* - *${title}* (${position} / ${duration}) :notes:`,
@@ -614,7 +710,7 @@ const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
 
             const newVolume = input === 'up' ? currentVolume + volumeInterval
                 : input === 'down' ? currentVolume - volumeInterval
-                : numberedInput;
+                    : numberedInput;
 
             await Sonos.setVolume(newVolume);
 

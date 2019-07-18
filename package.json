@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@slack/rtm-api": "^5.0.1",
+    "@slack/web-api": "^5.0.1",
     "auto-bind": "^2.1.0",
     "lodash": "^4.17.14",
     "nconf": "^0.10.0",
