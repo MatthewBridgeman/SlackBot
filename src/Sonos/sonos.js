@@ -2,46 +2,53 @@ const autoBind = require('auto-bind');
 const _ = require('lodash');
 const { Sonos: SonosClient, SpotifyRegion } = require('sonos');
 
-const { secondFormatter, padRight } = require('./utils');
+const { secondFormatter, padRight } = require('./../utils');
 const spotify = require('./spotify');
+
+const {
+    channels,
+    volumeInterval,
+    volumeMax,
+    playlistNameMax,
+    sonosIp,
+    spotifyMarket,
+} = require('./config');
 
 let SlackRTM;
 let SlackWeb;
 let Sonos;
 let Spotify;
-let volumeInterval;
-let volumeMax;
-let playlistNameMax;
-let sonosChannels;
 
 const playmodes = ['NORMAL', 'REPEAT_ONE', 'REPEAT_ALL', 'SHUFFLE', 'SHUFFLE_NOREPEAT', 'SHUFFLE_REPEAT_ONE'];
 
 class SonosClass {
-    constructor(slackRTMClient, slackWebClient, config) {
+    constructor(slackRTMClient, slackWebClient) {
         SlackRTM = slackRTMClient;
         SlackWeb = slackWebClient;
-        volumeInterval = config.get('volumeInterval');
-        volumeMax = config.get('volumeMax');
-        playlistNameMax = config.get('playlistNameMax');
-        sonosChannels = config.get('sonosChannels');
 
         // CONNECT SONOS
-        const sonosIp = config.get('sonosIp');
         Sonos = new SonosClient(sonosIp);
-
-        const spotifyMarket = config.get('spotifyMarket');
 
         if (spotifyMarket !== 'US') {
             Sonos.setSpotifyRegion(SpotifyRegion.EU);
         }
 
         // INITIALIZE SPOTIFY
-        Spotify = new spotify(config);
+        Spotify = new spotify();
 
         // MESSAGE LISTENER
         SlackRTM.on('message', (event) => this.processInput(event));
 
         autoBind(this);
+    }
+
+    // PROCESS POST REQUESTS
+    async processPostRequest(payload, channel, user, timestamp) {
+        const type = payload.shift();
+
+        if (type === 'song') {
+            this._addUri(payload.shift(), channel, user, timestamp);
+        }
     }
 
     // PROCESS SLACK COMMANDS
@@ -50,7 +57,7 @@ class SonosClass {
         const channel = event.channel;
         const channelName = await this._getChannelName(channel);
 
-        if (sonosChannels.includes(channelName)) {
+        if (channels.includes(channelName)) {
             if (message && message.charAt(0) === '!') {
                 const splitMessage = message.substring(1).split(' ');
                 const command = splitMessage.shift().toLowerCase();
@@ -113,10 +120,6 @@ class SonosClass {
                         this._searchSong(input, channel);
                         break;
 
-                    case 'search2':
-                        this._searchSong2(input, channel);
-                        break;
-
                     case 'searchalbum':
                         this._searchAlbum(input, channel);
                         break;
@@ -126,7 +129,7 @@ class SonosClass {
                         break;
 
                     case 'add':
-                        this._add(input, channel);
+                        this._addSearch(input, channel);
                         break;
 
                     case 'remove':
@@ -173,38 +176,53 @@ class SonosClass {
         }
     }
 
-    async _slackMessageWithImage(message, image, channel) {
+    async _slackRichMessage(blocks, channel) {
         try {
-            await SlackWeb.chat.postMessage({
-                blocks: [
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": message,
-                        },
-                        "accessory": {
-                            "type": "image",
-                            "image_url": image,
-                            "alt_text": "Album Art",
-                        },
-                    },
-                ],
-                channel,
-            });
+            await SlackWeb.chat.postMessage({ blocks, channel });
         } catch (error) {
-            console.error('An error occurred sending an image message:', error);
+            console.error('An error occurred sending a rich message:', error);
         }
     }
 
-    async _slackMessageWithButtons(options, channel) {
+    async _slackUpdateMessage(blocks, channel, timestamp) {
+        try {
+            await SlackWeb.chat.update({ blocks, channel, ts: timestamp });
+        } catch (error) {
+            console.error('An error occurred updating an message:', error);
+        }
+    }
+
+    _slackMessageWithImage(message, image) {
+        try {
+            const blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": message,
+                    },
+                    "accessory": {
+                        "type": "image",
+                        "image_url": image,
+                        "alt_text": "Album Art",
+                    },
+                },
+            ];
+
+            return blocks;
+        } catch (error) {
+            console.error('An error occurred constructing an image message:', error);
+        }
+    }
+
+    _slackMessageWithButtons(options) {
         try {
             const blocks = _.flatMap(options, (option) => ([
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": option,
+                        "text": option.message,
                     },
                     "accessory": {
                         "type": "button",
@@ -213,7 +231,7 @@ class SonosClass {
                             "text": "Add to Playlist",
                             "emoji": true,
                         },
-                        "value": "click_me_123",
+                        "value": `sonos|${option.action}`,
                     },
                 },
                 {
@@ -223,9 +241,9 @@ class SonosClass {
 
             blocks.pop();
 
-            await SlackWeb.chat.postMessage({ blocks, channel });
+            return blocks;
         } catch (error) {
-            console.error('An error occurred sending an image message:', error);
+            console.error('An error occurred constructing a button message:', error);
         }
     }
 
@@ -442,53 +460,22 @@ class SonosClass {
             }
 
             const songs = songList.map(songInfo => {
-                const {
-                    artist,
-                    song,
-                    album,
-                    releaseDate,
-                } = songInfo;
+                const { artist, song, album, releaseDate, uri } = songInfo;
 
-                return `${padRight(`${artist} - ${song} (${album})`, 80)} Released: ${releaseDate}`;
-            });
-
-            const message = `\`\`\`${songs.join('\n')}\`\`\``;
-
-            this._slackMessage(message, channel);
-        } catch (error) {
-            this._slackMessage(`An error occurred searching for the song! :(`, channel);
-            console.error('An error occurred searching for a song:', error);
-        }
-    }
-
-    async _searchSong2(input, channel) {
-        try {
-            if (!input) {
-                return this._slackMessage('You must specify a song to search for!\n!search <song name>', channel);
-            }
-
-            const songList = await Spotify.searchSong(input);
-
-            if (!songList.length) {
-                return this._slackMessage('No songs found! :(', channel);
-            }
-
-            const songs = songList.map(songInfo => {
-                const {
-                    artist,
-                    song,
-                    album,
-                    releaseDate,
-                } = songInfo;
-
-                return [
+                const message = [
                     `:musical_note: *${artist}* - *${song}*`,
                     `:notebook: ${album}`,
                     `:clock3: ${releaseDate}`,
                 ].join('\n');
+
+                return {
+                    message,
+                    action: `song|${uri}`,
+                }
             });
 
-            this._slackMessageWithButtons(songs, channel);
+            const blocks = this._slackMessageWithButtons(songs);
+            await this._slackRichMessage(blocks, channel);
         } catch (error) {
             this._slackMessage(`An error occurred searching for the song! :(`, channel);
             console.error('An error occurred searching for a song:', error);
@@ -557,7 +544,7 @@ class SonosClass {
         }
     }
 
-    async _add(input, channel) {
+    async _addSearch(input, channel) {
         try {
             if (!input) {
                 return this._slackMessage('You must specify a song to search for!\n!add <song name>', channel);
@@ -589,8 +576,51 @@ class SonosClass {
                 `Position *${position}* out of *${playlistLength}* in playlist`,
             ].join('\n');
 
+            const blocks = this._slackMessageWithImage(message, albumImage);
+            await this._slackRichMessage(blocks, channel);
+        } catch (error) {
+            this._slackMessage(`An error occurred trying to add the song to the playlist! :(`, channel);
+            console.error('An error occurred adding a song to the playlist:', error);
+        }
+    }
 
-            this._slackMessageWithImage(message, albumImage, channel);
+    async _addUri(uri, channel, user, timestamp) {
+        try {
+            if (!uri) {
+                this._slackMessage(`An error occurred trying to add the song to the playlist! :(`, channel);
+                console.error('An error occurred adding a song to the playlist: No URI returned from search.');
+            }
+
+            const [uriService, uriType, uriSong] = uri.split(':');
+
+            if (uriService !== 'spotify' || uriType !== 'track') {
+                this._slackMessage(`An error occurred trying to add the song to the playlist! :(`, channel);
+                console.error('An error occurred adding a song to the playlist: Invalid URI:', uri);
+            }
+
+            const result = await Sonos.queue(uri);
+            const {
+                FirstTrackNumberEnqueued: position,
+                NewQueueLength: playlistLength,
+            } = result;
+
+            const songInfo = await Spotify.getSong(uriSong);
+
+            const {
+                artist,
+                song,
+                album,
+                albumImage,
+            } = songInfo;
+
+            const message = [
+                `Sure thing, <@${user}>! *${artist}* - *${song} (${album})* has been added to the queue!`,
+                '',
+                `Position *${position}* out of *${playlistLength}* in playlist`,
+            ].join('\n');
+
+            const blocks = this._slackMessageWithImage(message, albumImage);
+            await this._slackUpdateMessage(blocks, channel, timestamp);
         } catch (error) {
             this._slackMessage(`An error occurred trying to add the song to the playlist! :(`, channel);
             console.error('An error occurred adding a song to the playlist:', error);

@@ -1,5 +1,5 @@
 {
-  "name": "synthmusic",
+  "name": "slackbot",
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
@@ -15,6 +15,8 @@
     "@slack/rtm-api": "^5.0.1",
     "@slack/web-api": "^5.0.1",
     "auto-bind": "^2.1.0",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
     "lodash": "^4.17.14",
     "nconf": "^0.10.0",
     "node-spotify-api": "^1.1.1",

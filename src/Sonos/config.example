@@ -1,0 +1,11 @@
+module.exports = {
+    "channels": ["sonos"],
+    "sonosIp": "127.0.0.1",
+    "spotifyId": "ID",
+    "spotifySecret": "SECRET",
+    "spotifyMarket": "GB",
+    "spotifySearchLimit": 5,
+    "volumeInterval": 5,
+    "volumeMax": 35,
+    "playlistNameMax": 30,
+};

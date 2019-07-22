@@ -1,0 +1,5 @@
+module.exports = {
+    "slackToken": "TOKEN",
+    "serverUrl": "/",
+    "serverPort": "8000",
+};

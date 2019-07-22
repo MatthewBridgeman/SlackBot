@@ -1,16 +1,18 @@
 const spotify = require('node-spotify-api');
 
+const {
+    spotifySearchLimit,
+    spotifyId,
+    spotifySecret,
+} = require('./config');
+
 let Spotify;
 
-let searchLimit;
-
 class SpotifyClass {
-    constructor(config) {
-        searchLimit = config.get('spotifySearchLimit');
-
+    constructor() {
         Spotify = new spotify({
-            id: config.get('spotifyId'),
-            secret: config.get('spotifySecret'),
+            id: spotifyId,
+            secret: spotifySecret,
         });
     }
 
@@ -18,7 +20,7 @@ class SpotifyClass {
         const songList = [];
 
         try {
-            const { tracks } = await Spotify.search({ type: 'track', query, limit: searchLimit });
+            const { tracks } = await Spotify.search({ type: 'track', query, limit: spotifySearchLimit });
 
             tracks.items.forEach(songInfo => {
                 const {
@@ -57,7 +59,7 @@ class SpotifyClass {
         const albumList = [];
 
         try {
-            const { albums } = await Spotify.search({ type: 'album', query, limit: searchLimit });
+            const { albums } = await Spotify.search({ type: 'album', query, limit: spotifySearchLimit });
 
             albums.items.forEach(albumInfo => {
                 const {
@@ -94,10 +96,9 @@ class SpotifyClass {
         const playlistList = [];
 
         try {
-            const { playlists } = await Spotify.search({ type: 'playlist', query, limit: searchLimit });
+            const { playlists } = await Spotify.search({ type: 'playlist', query, limit: spotifySearchLimit });
 
             playlists.items.forEach(playlistInfo => {
-                console.log(playlistInfo);
                 const {
                     images,
                     name,
@@ -124,6 +125,38 @@ class SpotifyClass {
             });
 
             return playlistList;
+        } catch (error) {
+            console.error('An error occurred searching for a playlist on spotify:', error);
+        }
+    };
+
+    async getSong(uri)  {
+        try {
+            const songInfo = await Spotify.request(`https://api.spotify.com/v1/tracks/${uri}`);
+
+            const {
+                artists,
+                album: {
+                    name: album,
+                    release_date: releaseDate,
+                    images,
+                } = {},
+                name: songName,
+            } = songInfo;
+
+            const artistName = artists && artists.length && artists[0].name;
+            const albumImage = images && images.length && images[2] && images[2].url;
+
+            const song = {
+                artist: artistName,
+                song: songName,
+                album,
+                albumImage,
+                releaseDate,
+                uri,
+            };
+
+            return song;
         } catch (error) {
             console.error('An error occurred searching for a playlist on spotify:', error);
         }
